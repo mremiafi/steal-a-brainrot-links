@@ -24,7 +24,8 @@
 <div id="oldResults"></div>
 
 <script>
-const AUTO_REFRESH_INTERVAL = 1800000; // 30 min
+// AUTO REFRESH TIME
+const AUTO_REFRESH_INTERVAL = 1800000; // 30 minutes
 let timeRemaining = AUTO_REFRESH_INTERVAL / 1000;
 
 // Countdown timer
@@ -39,14 +40,13 @@ function updateTimerDisplay() {
     const minutes = Math.floor(timeRemaining / 60);
     const seconds = timeRemaining % 60;
     document.getElementById('timer').innerText =
-        `Next scan in: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        `Next scan in: ${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
 }
 
 // LocalStorage helpers
 function getStoredLinks(key) {
     return JSON.parse(localStorage.getItem(key) || "[]");
 }
-
 function storeLinks(key, links) {
     localStorage.setItem(key, JSON.stringify(links));
 }
@@ -69,7 +69,7 @@ function displayOldFolders() {
     }
 }
 
-// Scan the newest 100 posts
+// Scan newest 100 posts
 async function scanWall() {
     const groupId = document.getElementById('groupId').value;
     const results = document.getElementById('results');
@@ -82,13 +82,13 @@ async function scanWall() {
     results.innerHTML = "<p>Scanning newest 100 posts...</p>";
 
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const targetId = "18447204952"; 
+    const targetId = "18447204952"; // Steal a Brainrot ID
     let newLinks = [];
 
     try {
-        const url = `https://groups.roblox.com/v1/groups/${groupId}/wall/posts?limit=100&sortOrder=Desc`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("API request failed");
+        const apiUrl = `https://groups.roblox.com/v1/groups/${groupId}/wall/posts?limit=100&sortOrder=Desc`;
+        const response = await fetch(apiUrl);
+        if (!response.ok) throw new Error("Failed to fetch wall posts");
 
         const data = await response.json();
         data.data.forEach(post => {
@@ -108,11 +108,9 @@ async function scanWall() {
 
         const oldCurrent = getStoredLinks("CurrentLinks");
 
-        // Check for new links
+        // Move old links to Old # folder if new links found
         const newOnes = newLinks.filter(n => !oldCurrent.some(o => o.link === n.link));
-
         if (newOnes.length > 0 && oldCurrent.length > 0) {
-            // Move old links to a new Old # folder
             let index = 1;
             while (localStorage.getItem(`OldLinks${index}`)) index++;
             storeLinks(`OldLinks${index}`, oldCurrent);
@@ -120,7 +118,7 @@ async function scanWall() {
 
         storeLinks("CurrentLinks", newLinks);
 
-        // Display new links
+        // Display current links
         let html = "<h2>Current Steal a Brainrot Links:</h2>";
         newLinks.forEach(entry => {
             html += `<div class="link">
@@ -145,7 +143,7 @@ setInterval(() => {
     if (groupId) scanWall();
 }, AUTO_REFRESH_INTERVAL);
 
-// Load old folders on page load
+// Display old folders on page load
 displayOldFolders();
 
 </script>

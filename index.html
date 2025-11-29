@@ -24,11 +24,10 @@
 <div id="oldResults"></div>
 
 <script>
-// AUTO REFRESH TIME
 const AUTO_REFRESH_INTERVAL = 1800000; // 30 min
 let timeRemaining = AUTO_REFRESH_INTERVAL / 1000;
 
-// COUNTDOWN TIMER
+// Countdown timer
 setInterval(() => {
     if (timeRemaining > 0) {
         timeRemaining--;
@@ -43,17 +42,16 @@ function updateTimerDisplay() {
         `Next scan in: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-// HELPER: Load stored links
+// LocalStorage helpers
 function getStoredLinks(key) {
     return JSON.parse(localStorage.getItem(key) || "[]");
 }
 
-// HELPER: Save links
 function storeLinks(key, links) {
     localStorage.setItem(key, JSON.stringify(links));
 }
 
-// DISPLAY OLD FOLDERS
+// Display old folders
 function displayOldFolders() {
     const oldDiv = document.getElementById("oldResults");
     oldDiv.innerHTML = "<h2>Old Link Folders:</h2>";
@@ -61,21 +59,17 @@ function displayOldFolders() {
     let index = 1;
     while (localStorage.getItem(`OldLinks${index}`)) {
         const links = getStoredLinks(`OldLinks${index}`);
-        let html = `
-            <div class="oldFolder">
-                <strong>Old #${index}</strong><br>
-        `;
+        let html = `<div class="oldFolder"><strong>Old #${index}</strong><br>`;
         links.forEach(l => {
             html += `<div><a href="${l.link}" target="_blank">${l.link}</a></div>`;
         });
-
         html += "</div>";
         oldDiv.innerHTML += html;
         index++;
     }
 }
 
-// MAIN SCAN FUNCTION
+// Scan the newest 100 posts
 async function scanWall() {
     const groupId = document.getElementById('groupId').value;
     const results = document.getElementById('results');
@@ -85,94 +79,75 @@ async function scanWall() {
         return;
     }
 
-    results.innerHTML = "<p>Scanning newest 1,000 posts...</p>";
+    results.innerHTML = "<p>Scanning newest 100 posts...</p>";
 
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const targetId = "18447204952"; 
     let newLinks = [];
 
     try {
-        let cursor = "";
-        for (let i = 0; i < 1; i++) {
-            const url = cursor
-                ? `https://groups.roblox.com/v1/groups/${groupId}/wall/posts?limit=100&sortOrder=Desc&cursor=${cursor}`
-                : `https://groups.roblox.com/v1/groups/${groupId}/wall/posts?limit=100&sortOrder=Desc`;
+        const url = `https://groups.roblox.com/v1/groups/${groupId}/wall/posts?limit=100&sortOrder=Desc`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("API request failed");
 
-            const response = await fetch(url);
-            if (!response.ok) break;
+        const data = await response.json();
+        data.data.forEach(post => {
+            const found = post.body.match(urlRegex);
+            if (found) {
+                found.forEach(link => {
+                    if (link.includes("roblox.com") && link.includes(targetId)) {
+                        newLinks.push({
+                            link: link,
+                            author: post.poster.username,
+                            date: post.created
+                        });
+                    }
+                });
+            }
+        });
 
-            const data = await response.json();
-            cursor = data.nextPageCursor;
+        const oldCurrent = getStoredLinks("CurrentLinks");
 
-            data.data.forEach(post => {
-                const found = post.body.match(urlRegex);
-                if (found) {
-                    found.forEach(link => {
-                        if (link.includes("roblox.com") && link.includes(targetId)) {
-                            newLinks.push({
-                                link: link,
-                                author: post.poster.username,
-                                date: post.created
-                            });
-                        }
-                    });
-                }
-            });
-
-            if (!cursor) break;
-        }
-
-        let oldCurrent = getStoredLinks("CurrentLinks");
-
-        // CHECK IF NEW LINKS APPEARED
-        const newOnes = newLinks.filter(n =>
-            !oldCurrent.some(o => o.link === n.link)
-        );
+        // Check for new links
+        const newOnes = newLinks.filter(n => !oldCurrent.some(o => o.link === n.link));
 
         if (newOnes.length > 0 && oldCurrent.length > 0) {
-            // Move old "Current" to a new Old # folder
+            // Move old links to a new Old # folder
             let index = 1;
             while (localStorage.getItem(`OldLinks${index}`)) index++;
             storeLinks(`OldLinks${index}`, oldCurrent);
         }
 
-        // Save new current links
         storeLinks("CurrentLinks", newLinks);
 
-        // DISPLAY NEW LINKS
+        // Display new links
         let html = "<h2>Current Steal a Brainrot Links:</h2>";
         newLinks.forEach(entry => {
-            html += `
-                <div class="link">
-                    <a href="${entry.link}" target="_blank">${entry.link}</a><br>
-                    <small>Posted by: ${entry.author} on ${new Date(entry.date).toLocaleString()}</small>
-                </div>
-            `;
+            html += `<div class="link">
+                        <a href="${entry.link}" target="_blank">${entry.link}</a><br>
+                        <small>Posted by: ${entry.author} on ${new Date(entry.date).toLocaleString()}</small>
+                     </div>`;
         });
-
         results.innerHTML = html;
 
-        // Refresh old folders list
         displayOldFolders();
-
-        // Reset timer
         timeRemaining = AUTO_REFRESH_INTERVAL / 1000;
 
     } catch (err) {
-        results.innerHTML = "<p>Error scanning wall.</p>";
+        results.innerHTML = `<p>Error scanning wall: ${err.message}</p>`;
+        console.log(err);
     }
 }
 
-// AUTO REFRESH
+// Auto refresh
 setInterval(() => {
     const groupId = document.getElementById('groupId').value;
     if (groupId) scanWall();
 }, AUTO_REFRESH_INTERVAL);
 
-// Load old folders on page open
+// Load old folders on page load
 displayOldFolders();
 
 </script>
-
 </body>
 </html>

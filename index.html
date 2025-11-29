@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Steal a Brainrot Link Finder</title>
+    <style>
+        body { font-family: Arial; background: #f7f7f7; padding: 20px; }
+        #results { background: white; padding: 20px; border-radius: 10px; }
+        .link { margin-bottom: 10px; padding: 10px; border-bottom: 1px solid #ddd; }
+        #timer { font-weight: bold; margin-top: 10px; }
+        .oldFolder { margin-top: 15px; padding: 10px; background: #eee; border-radius: 6px; }
+    </style>
+</head>
+<body>
+
+<h1>Steal a Brainrot – Roblox Link Finder</h1>
+
+<input type="text" id="groupId" placeholder="Enter Roblox Group ID">
+<button onclick="scanWall()">Scan Wall</button>
+
+<p><small>Auto-refreshes every 30 minutes.</small></p>
+<p id="timer">Next scan in: 30:00</p>
+
+<div id="results"></div>
+<div id="oldResults"></div>
+
+<script>
+// AUTO REFRESH TIME
+const AUTO_REFRESH_INTERVAL = 1800000; // 30 min
+let timeRemaining = AUTO_REFRESH_INTERVAL / 1000;
+
+// COUNTDOWN TIMER
+setInterval(() => {
+    if (timeRemaining > 0) {
+        timeRemaining--;
+        updateTimerDisplay();
+    }
+}, 1000);
+
+function updateTimerDisplay() {
+    const minutes = Math.floor(timeRemaining / 60);
+    const seconds = timeRemaining % 60;
+    document.getElementById('timer').innerText =
+        `Next scan in: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+// HELPER: Load stored links
+function getStoredLinks(key) {
+    return JSON.parse(localStorage.getItem(key) || "[]");
+}
+
+// HELPER: Save links
+function storeLinks(key, links) {
+    localStorage.setItem(key, JSON.stringify(links));
+}
+
+// DISPLAY OLD FOLDERS
+function displayOldFolders() {
+    const oldDiv = document.getElementById("oldResults");
+    oldDiv.innerHTML = "<h2>Old Link Folders:</h2>";
+
+    let index = 1;
+    while (localStorage.getItem(`OldLinks${index}`)) {
+        const links = getStoredLinks(`OldLinks${index}`);
+        let html = `
+            <div class="oldFolder">
+                <strong>Old #${index}</strong><br>
+        `;
+        links.forEach(l => {
+            html += `<div><a href="${l.link}" target="_blank">${l.link}</a></div>`;
+        });
+
+        html += "</div>";
+        oldDiv.innerHTML += html;
+        index++;
+    }
+}
+
+// MAIN SCAN FUNCTION
+async function scanWall() {
+    const groupId = document.getElementById('groupId').value;
+    const results = document.getElementById('results');
+
+    if (!groupId) {
+        results.innerHTML = "<p>Please enter a Group ID.</p>";
+        return;
+    }
+
+    results.innerHTML = "<p>Scanning newest 1,000 posts...</p>";
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const targetId = "18447204952"; 
+    let newLinks = [];
+
+    try {
+        let cursor = "";
+        for (let i = 0; i < 10; i++) {
+            const url = cursor
+                ? `https://groups.roblox.com/v1/groups/${groupId}/wall/posts?limit=100&sortOrder=Desc&cursor=${cursor}`
+                : `https://groups.roblox.com/v1/groups/${groupId}/wall/posts?limit=100&sortOrder=Desc`;
+
+            const response = await fetch(url);
+            if (!response.ok) break;
+
+            const data = await response.json();
+            cursor = data.nextPageCursor;
+
+            data.data.forEach(post => {
+                const found = post.body.match(urlRegex);
+                if (found) {
+                    found.forEach(link => {
+                        if (link.includes("roblox.com") && link.includes(targetId)) {
+                            newLinks.push({
+                                link: link,
+                                author: post.poster.username,
+                                date: post.created
+                            });
+                        }
+                    });
+                }
+            });
+
+            if (!cursor) break;
+        }
+
+        let oldCurrent = getStoredLinks("CurrentLinks");
+
+        // CHECK IF NEW LINKS APPEARED
+        const newOnes = newLinks.filter(n =>
+            !oldCurrent.some(o => o.link === n.link)
+        );
+
+        if (newOnes.length > 0 && oldCurrent.length > 0) {
+            // Move old "Current" to a new Old # folder
+            let index = 1;
+            while (localStorage.getItem(`OldLinks${index}`)) index++;
+            storeLinks(`OldLinks${index}`, oldCurrent);
+        }
+
+        // Save new current links
+        storeLinks("CurrentLinks", newLinks);
+
+        // DISPLAY NEW LINKS
+        let html = "<h2>Current Steal a Brainrot Links:</h2>";
+        newLinks.forEach(entry => {
+            html += `
+                <div class="link">
+                    <a href="${entry.link}" target="_blank">${entry.link}</a><br>
+                    <small>Posted by: ${entry.author} on ${new Date(entry.date).toLocaleString()}</small>
+                </div>
+            `;
+        });
+
+        results.innerHTML = html;
+
+        // Refresh old folders list
+        displayOldFolders();
+
+        // Reset timer
+        timeRemaining = AUTO_REFRESH_INTERVAL / 1000;
+
+    } catch (err) {
+        results.innerHTML = "<p>Error scanning wall.</p>";
+    }
+}
+
+// AUTO REFRESH
+setInterval(() => {
+    const groupId = document.getElementById('groupId').value;
+    if (groupId) scanWall();
+}, AUTO_REFRESH_INTERVAL);
+
+// Load old folders on page open
+displayOldFolders();
+
+</script>
+
+</body>
+</html>
